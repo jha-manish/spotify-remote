@@ -14,8 +14,6 @@ var querystring = require('querystring');
 var cookieParser = require('cookie-parser');
 var secrets = require('./secrets') // Your secret
 
-console.log(secrets.client_secret);
-
 var client_id = 'bff70bba1f374eadbb7f2c57c8cb7ce0'; // Your client id
 var client_secret = secrets.client_secret;
 var redirect_uri = 'http://localhost:8888/callback'; // Your redirect uri
@@ -49,7 +47,7 @@ app.get('/login', function(req, res) {
   res.cookie(stateKey, state);
 
   // your application requests authorization
-  var scope = 'user-read-private user-read-email';
+  var scope = 'user-read-private user-read-email user-modify-playback-state user-read-playback-state';
   res.redirect('https://accounts.spotify.com/authorize?' +
     querystring.stringify({
       response_type: 'code',

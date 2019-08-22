@@ -25,6 +25,11 @@
       <div id="loggedin">
         <div id="user-profile">
         </div>
+        <div class="btn-group">
+          <button type="button" class="btn btn-default" id="goBack">Back</button>
+          <button type="button" class="btn btn-default" id="playPause">Play</button>
+          <button type="button" class="btn btn-default" id="goForward">Forward</button>
+        </div>
         <div id="oauth">
         </div>
         <button class="btn btn-default" id="obtain-new-token">Obtain new token using the refresh token</button>
@@ -92,6 +97,38 @@
             refresh_token = params.refresh_token,
             error = params.error;
 
+        // playback state variables
+        var is_playing = false;
+        var progress_ms = 0;
+        var player_check_interval = null;
+
+        function updatePlayState(playing) {
+          var playPauseButton = document.getElementById('playPause');
+          playPauseButton.innerHTML = playing ? 'Pause' : 'Play';
+          is_playing = playing;
+
+          return is_playing;
+        }
+
+        function getPlayerState(startInterval=false) {
+          $.ajax({
+            url: 'https://api.spotify.com/v1/me/player/currently-playing',
+            headers: {
+              'Authorization': 'Bearer ' + access_token
+            },
+          }).done(function(data, status) {
+            console.log(data);
+            console.log(status);
+
+            updatePlayState(data.is_playing);
+            progress_ms = data.progress_ms;
+
+            if (startInterval && data.is_playing) {
+              player_check_interval = window.setInterval(getPlayerState, 3000);
+            }
+          });
+        }
+
         if (error) {
           alert('There was an error during the authentication');
         } else {
@@ -114,6 +151,10 @@
                   $('#loggedin').show();
                 }
             });
+
+            // get player state
+            getPlayerState(true);
+
           } else {
               // render initial screen
               $('#login').show();
@@ -134,9 +175,56 @@
               });
             });
           }, false);
+
+          document.getElementById('goForward').addEventListener('click', function() {
+            $.ajax({
+              url: 'https://api.spotify.com/v1/me/player/next',
+              headers: {
+                'Authorization': 'Bearer ' + access_token
+              },
+              method: 'POST',
+            });
+          }, false);
+
+          document.getElementById('goBack').addEventListener('click', function() {
+            var action = 'previous';
+            var method = 'POST';
+
+            if (progress_ms >= 3000) {
+              action = 'seek?position_ms=0';
+              method = 'PUT';
+            }
+
+            $.ajax({
+              url: 'https://api.spotify.com/v1/me/player/' + action,
+              headers: {
+                'Authorization': 'Bearer ' + access_token
+              },
+              method: method,
+            }).success(function() {
+              getPlayerState();
+            });
+          }, false);
+
+          document.getElementById('playPause').addEventListener('click', function() {
+            var url = 'https://api.spotify.com/v1/me/player/' + (is_playing ? 'pause' : 'play');
+            $.ajax({
+              url: url,
+              headers: {
+                'Authorization': 'Bearer ' + access_token
+              },
+              method: 'PUT',
+            }).success(function() {
+              var now_playing = updatePlayState(!is_playing);
+              if (now_playing) {
+                player_check_interval = window.setInterval(getPlayerState, 3000);
+              } else {
+                window.clearInterval(player_check_interval);
+              }
+            });
+          }, false);
         }
       })();
     </script>
   </body>
 </html>
-

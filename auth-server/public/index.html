@@ -31,6 +31,7 @@
           <button type="button" class="btn btn-default" id="playPause">Play</button>
           <button type="button" class="btn btn-default" id="goForward">Forward</button>
         </div>
+        <div id="playlists"></div>
         <div id="oauth">
         </div>
         <button class="btn btn-default" id="obtain-new-token">Obtain new token using the refresh token</button>
@@ -65,10 +66,32 @@
       </dl>
     </script>
 
+    <script id="playlists-template" type="text/x-handlebars-template">
+      <table>
+        <tbody>
+          {{#each}}
+          <tr>
+            <td>
+              <a href="{{this.uri}}" class="playlistSelect">
+                {{this.name}}
+              </a>
+            </td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </script>
+
     <script src="//cdnjs.cloudflare.com/ajax/libs/handlebars.js/2.0.0-alpha.1/handlebars.min.js"></script>
     <script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
     <script>
       (function() {
+
+        Handlebars.registerHelper( "join", function( array, sep, options ) {
+          return array.map(function(item) {
+            return options.fn(item);
+          }).join(sep);
+        });
 
         /**
          * Obtains parameters from the hash of the URL
@@ -92,6 +115,10 @@
             oauthTemplate = Handlebars.compile(oauthSource),
             oauthPlaceholder = document.getElementById('oauth');
 
+        var playlistsSource = document.getElementById('playlists-template').innerHTML,
+            playlistsTemplate = Handlebars.compile(playlistsSource),
+            playlistsPlaceholder = document.getElementById('playlists');
+
         var params = getHashParams();
 
         var access_token = params.access_token,
@@ -113,7 +140,6 @@
         }
 
         function updateNowPlaying(track) {
-          console.log(track);
           var nowPlaying = document.getElementById('now-playing');
           if (track == null) {
             nowPlaying.innerHTML = "";
@@ -130,9 +156,6 @@
               'Authorization': 'Bearer ' + access_token
             },
           }).done(function(data, status) {
-            console.log(data);
-            console.log(status);
-
             updatePlayState(data.is_playing);
             updateNowPlaying(data.item);
             progress_ms = data.progress_ms;
@@ -169,6 +192,17 @@
             // get player state
             getPlayerState(true);
 
+            // get favourite tracks
+            $.ajax({
+              url: 'https://api.spotify.com/v1/me/playlists?limit=50',
+              headers: {
+                'Authorization': 'Bearer ' + access_token
+              },
+              success: function(response) {
+                playlistsPlaceholder.innerHTML = playlistsTemplate(response.items);
+              }
+            })
+
           } else {
               // render initial screen
               $('#login').show();
@@ -197,6 +231,9 @@
                 'Authorization': 'Bearer ' + access_token
               },
               method: 'POST',
+              success: function() {
+                getPlayerState();
+              }
             });
           }, false);
 
@@ -215,9 +252,10 @@
                 'Authorization': 'Bearer ' + access_token
               },
               method: method,
-            }).success(function() {
-              getPlayerState();
-            });
+              success: function() {
+                getPlayerState();
+              },
+            })
           }, false);
 
           document.getElementById('playPause').addEventListener('click', function() {
@@ -228,15 +266,35 @@
                 'Authorization': 'Bearer ' + access_token
               },
               method: 'PUT',
-            }).success(function() {
-              var now_playing = updatePlayState(!is_playing);
-              if (now_playing) {
-                player_check_interval = window.setInterval(getPlayerState, 3000);
-              } else {
-                window.clearInterval(player_check_interval);
-              }
+              success: function() {
+                var now_playing = updatePlayState(!is_playing);
+                if (now_playing) {
+                  player_check_interval = window.setInterval(getPlayerState, 3000);
+                } else {
+                  window.clearInterval(player_check_interval);
+                }
+              },
             });
           }, false);
+
+          $(document).on('click', 'a.playlistSelect', function(e) {
+            e.preventDefault();
+
+            var uri = $(this).attr('href');
+            $.ajax({
+              url: 'https://api.spotify.com/v1/me/player/play',
+              headers: {
+                'Authorization': 'Bearer ' + access_token
+              },
+              method: 'PUT',
+              data: JSON.stringify({
+                context_uri: uri,
+              }),
+              success: function() {
+                getPlayerState();
+              }
+            });
+          });
         }
       })();
     </script>
